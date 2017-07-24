@@ -2,7 +2,8 @@
   (:require [clojure.java.io]
             [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
             [clojure.java.io :as io]
-            [clojure.string :as string]))
+            [clojure.string :as string])
+  (:gen-class))
 
 (def pages-dir "resources/scraped-pages/")
 (def test-page-path (str pages-dir "2017-07-20-WDC.html"))
@@ -18,17 +19,22 @@
   [row]
   (not (empty? (select row [(attr-contains :src "veggie")]))))
 
-;; TODO: remove " - Vegetarian" from end of item names
 (defn- food-item
   "Selects a food item from a row"
   [row]
-  {:name (->> (select row [:div.shortmenurecipes :span])
-              (map html/text)
-              (apply str)  ;; The last character is some kind of space, but
-              (butlast)    ;; clojure doesn't recognize it as such, so trim
-              (apply str)) ;; doesn't work. TODO: Fix unnecessary conversions
-   :gluten-free (gluten-free? row)
-   :vegetarian (vegetarian? row)})
+  ;; The last character is some kind of space, but
+  ;; clojure doesn't recognize it as such, so trim
+  ;; doesn't work. There has to be a more efficient way of doing this.
+  ;; TODO: Fix unnecessary conversions
+  (let [name (->> (select row [:div.shortmenurecipes :span])
+                  (map html/text)
+                  (apply str)
+                  (butlast)
+                  (apply str))]
+    ;; Redundant data be damned.
+    {:name (string/replace name #" - Vegetarian" "")
+     :gluten-free (gluten-free? row)
+     :vegetarian (vegetarian? row)}))
 
 (defn- category?
   "Tells whether a given row contains a category (true) or a food item (false)"
@@ -36,6 +42,7 @@
   (not (empty? (select row [:div.shortmenucats]))))
 
 (defn- ->kebob-case
+  "Not rigorous but handles the case here"
   [s]
   (-> s
       (string/lower-case)
@@ -56,10 +63,13 @@
     (string/replace (first name) #"/chowders" "")))
 
 (defn- categorize
+  "Creates a map of {:category [food-item]}"
   [meal-info]
   (let [cats-and-items (partition 2 (partition-by category? meal-info))]
     (into {} (for [[[cat] foods] cats-and-items]
-               [(keyword (category-name cat)) (into [] (map food-item foods))]))))
+               (let [k (keyword (category-name cat))
+                     v (vec (map food-item foods))]
+                 [k v])))))
 
 (defn- meals
   "Selects a map of nodes where each top-level entry is a meal"
