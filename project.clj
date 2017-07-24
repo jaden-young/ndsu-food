@@ -9,4 +9,5 @@
   :target-path "target/%s"
   :profiles {:scraper {:main scraper.core
                        :uberjar-name "ndsu-food-scraper.jar"}
-             :uberjar {:aot :all}})
+             :uberjar {:aot :all}}
+  :repl-options {:init (set! *print-length* 50)})
