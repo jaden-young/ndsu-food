@@ -1,14 +1,101 @@
 (ns scraper.core
-  (:require [clojure.java.io]
-            [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
+  (:require [clj-time.core :as t]
             [clojure.java.io :as io]
             [clojure.string :as string]
-            [scraper.grab :refer [grab grab! all-locs iso-date-fmt]]
-            [clj-time.core :as t])
+            [cemerick.url :as url]
+            [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
+            [clj-time.format :as t-fmt]
+            [clojure.string :as str])
   (:gen-class))
 
-(def ^:const pages-dir "resources/scraped-pages/")
+;; *****************************************************************************
+;; Grab pages
+;; *****************************************************************************
+(def ^:const base-url "https://www.ndsu.edu/dining/menu/shortmenu.asp")
+(def website-date-formatter (t-fmt/formatter "M/d/yyyy"))
 
+;; Key to identify restaurant with website
+(def ^:const loc-nums {:wdc "02"
+                       :rdc "04"
+                       :udc "10"
+                       :pe "25"
+                       :mg "11"})
+(def ^:const all-locs (vec (keys loc-nums)))
+
+(def cache-dir
+  ;; One would assume that a directory name ends in '/', but I guess Java
+  ;; has it's reasons.
+  (let [home (System/getProperty "user.home")
+        folders [home ".cache" "ndsu-food" "html"]
+        path (interpose (java.io.File/separatorChar) folders)
+        s (apply str path)
+        dir (str s (java.io.File/separatorChar))]
+    dir))
+
+(defn- loc-abbrev
+  [loc]
+  (-> loc
+      (str)
+      (subs 1)
+      (string/upper-case)))
+
+(defn iso-date-fmt
+  [date]
+  (t-fmt/unparse (t-fmt/formatters :date) date))
+
+(defn- menu-date-fmt
+  [date]
+  (t-fmt/unparse website-date-formatter date))
+
+(defn- build-filename
+  [date loc]
+  (let [loc-str (-> loc
+                    (str)
+                    (subs 1)
+                    (str/upper-case))]
+  (str (iso-date-fmt date) "-" loc-str ".html")))
+
+(defn- build-url
+  [date loc]
+  (let [u (url/url base-url)
+        q {:dtdate (menu-date-fmt date)
+           :locationNum (get loc-nums loc)}]
+    (str (assoc u :query q))))
+
+(defn- persist!
+  [date loc]
+  (let [fname (build-filename date loc)
+        file (io/file (str cache-dir fname))]
+    (when-not (.exists file)
+      (io/make-parents file)
+      (io/copy (build-url date loc) file))
+    file))
+
+(defn- locs-resources
+  [date locs resource-fn]
+  (into {} (map #(vector % (resource-fn date %)) locs)))
+
+(defn grab
+  "Creates a mapping from location keywords to urls of
+  menus for those dates/locs on the web. If locations are not
+  provided, defaults to all."
+  ([date]
+   (apply grab date all-locs))
+  ([date & locs]
+   (locs-resources date locs build-url)))
+
+(defn grab!
+  "Creates a mapping from location keywords to java.io.File objects with html
+  data for the menus at that loc/date. Grabs the menu data from the web and
+  stores it at ~/.cache/ndsu-food/html/. Cache is checked each time, so web
+  is only hit once."
+  ([date]
+   (apply grab! date all-locs))
+  ([date & locs]
+   (locs-resources date locs persist!)))
+;; *****************************************************************************
+;; Scrape pages
+;; *****************************************************************************
 (defn- gluten-free?
   [row]
   (not (empty? (select row [(attr-contains :src "gluten")]))))
@@ -23,13 +110,12 @@
   ;; The last character is some kind of space, but
   ;; clojure doesn't recognize it as such, so trim
   ;; doesn't work. There has to be a more efficient way of doing this.
-  ;; TODO: Fix unnecessary conversions
+  ;; HACK: Fix unnecessary conversions
   (let [name (->> (select row [:div.shortmenurecipes :span])
                   (map html/text)
                   (apply str)
                   (butlast)
                   (apply str))]
-    ;; Redundant data be damned.
     {:name (string/replace name #" - Vegetarian" "")
      :gluten-free (gluten-free? row)
      :vegetarian (vegetarian? row)}))
@@ -137,4 +223,4 @@
 
 (defn -main
   [& args]
- ())
+  ())
