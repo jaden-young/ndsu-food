@@ -2,14 +2,12 @@
   (:require [clojure.java.io]
             [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
             [clojure.java.io :as io]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [scraper.grab :refer [grab grab! all-locs iso-date-fmt]]
+            [clj-time.core :as t])
   (:gen-class))
 
-(def pages-dir "resources/scraped-pages/")
-(def test-page-path (str pages-dir "2017-07-20-WDC.html"))
-
-;; Private functions are either small utilites, or only operate on the ugly
-;; intermediate gobley gook on our road to extracted data.
+(def ^:const pages-dir "resources/scraped-pages/")
 
 (defn- gluten-free?
   [row]
@@ -97,26 +95,46 @@
         data (meal-data m)]
     {(keyword name) (categorize data)}))
 
-(defn html->meal
-  "Extracts a menu from an html document. html can be one of:
-    * a string (denoting a resource on the classpath)
-    * a java.io.File
-    * a java.io.Reader,
-    * a java.io.InputStream,
-    * a java.net.URI
-    * a java.net.URL"
+(defn- fetch-page
+  [file]
+  (with-open [rdr (io/reader file)]
+    (html/html-resource rdr)))
+
+(defn html->menu
+  "Extracts a menu map from an html document. Argument must be able to
+  be coerced to a java.io.Reader"
   [html]
-  (let [page (html/html-resource html)
+  (let [page (fetch-page html)
         ms (meals page)]
     (into {} (map meal ms))))
 
-;; dev func
-(defn- fetch-page
-  [file-path]
-  (with-open [rdr (io/reader file-path)]
-    (html/html-resource rdr)))
+(defn- fmap
+  [f m]
+  (into (empty m) (for [[k v] m] [k (f v)])))
+
+(defn- do-scrape
+  [date locs grabber]
+  (let [srcs (apply grabber date locs)
+        menus (fmap html->menu srcs)]
+    {:date (iso-date-fmt date)
+     :menus menus}))
+
+(defn scrape
+  "Scrapes menu data from the web for the given date/locs, returning a map.
+  If no locations are provided, all are scraped. Results are not cached."
+  ([date]
+   (apply scrape date all-locs))
+  ([date & locs]
+   (do-scrape date locs grab)))
+
+(defn scrape!
+  "Same as scrape, but persists html files to ~/.cache/ndsu-food/html/.
+  Cache is checked on each run, so web is only hit once."
+  ([date]
+   (apply scrape! date all-locs))
+  ([date & locs]
+   (do-scrape date locs grab!)))
 
 (defn -main
   [& args]
-  (with-open [rdr (io/reader test-page-path)]
-    (html->meal rdr)))
+ ())

@@ -5,7 +5,7 @@
             [clojure.string :as string]
             [cemerick.url :as url]))
 
-(def base-url "https://www.ndsu.edu/dining/menu/shortmenu.asp")
+(def ^:const base-url "https://www.ndsu.edu/dining/menu/shortmenu.asp")
 (def website-date-formatter (t-fmt/formatter "M/d/yyyy"))
 
 (def ^:const loc-nums {:wdc "02"
@@ -32,7 +32,7 @@
       (subs 1)
       (string/upper-case)))
 
-(defn- iso-date-fmt
+(defn iso-date-fmt
   [date]
   (t-fmt/unparse (t-fmt/formatters :date) date))
 
