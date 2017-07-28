@@ -28,7 +28,11 @@
                  [org.webjars/jquery "3.2.1"]
                  [ring-webjars "0.2.0"]
                  [ring/ring-core "1.6.2"]
-                 [ring/ring-defaults "0.3.0"]]
+                 [ring/ring-defaults "0.3.0"]
+                 [selmer "1.11.0"]
+                 [com.cemerick/url "0.1.1"]
+                 [clj-time "0.14.0"]
+                 [enlive "1.1.6"]]
 
   :min-lein-version "2.0.0"
 
