@@ -1,11 +1,12 @@
 (ns ndsu-food.db.core
   (:require
-    [cheshire.core :refer [generate-string parse-string]]
-    [clj-time.jdbc]
-    [clojure.java.jdbc :as jdbc]
-    [conman.core :as conman]
-    [ndsu-food.config :refer [env]]
-    [mount.core :refer [defstate]])
+   [cheshire.core :refer [generate-string parse-string]]
+   [clj-time.jdbc]
+   [clojure.java.jdbc :as jdbc]
+   [conman.core :as conman]
+   [ndsu-food.config :refer [env]]
+   [mount.core :refer [defstate]]
+   [clj-time.coerce :refer [from-sql-date to-sql-date]])
   (:import org.postgresql.util.PGobject
            java.sql.Array
            clojure.lang.IPersistentMap
@@ -15,8 +16,8 @@
             PreparedStatement]))
 
 (defstate ^:dynamic *db*
-           :start (conman/connect! {:jdbc-url (env :database-url)})
-           :stop (conman/disconnect! *db*))
+  :start (conman/connect! {:jdbc-url (env :database-url)})
+  :stop (conman/disconnect! *db*))
 
 (conman/bind-connection *db* "sql/queries.sql")
 
@@ -32,12 +33,21 @@
         "json" (parse-string value true)
         "jsonb" (parse-string value true)
         "citext" (str value)
-        value))))
+        value)))
+
+  org.joda.time.DateTime
+  (result-set-read-column [value metadata index]
+    (from-sql-date value)))
+
+(extend-type org.joda.time.DateTime
+  jdbc/ISQLParameter
+  (set-parameter [value ^PreparedStatement stmt idx]
+    (.setDate stmt idx (to-sql-date value))))
 
 (defn to-pg-json [value]
-      (doto (PGobject.)
-            (.setType "jsonb")
-            (.setValue (generate-string value))))
+  (doto (PGobject.)
+    (.setType "jsonb")
+    (.setValue (generate-string value))))
 
 (extend-type clojure.lang.IPersistentVector
   jdbc/ISQLParameter
