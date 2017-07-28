@@ -27,6 +27,7 @@
 ;; *****************************************************************************
 ;; Grab pages
 ;; *****************************************************************************
+
 (def ^:const base-url "https://www.ndsu.edu/dining/menu/shortmenu.asp")
 (def website-date-formatter (t-fmt/formatter "M/d/yyyy"))
 
