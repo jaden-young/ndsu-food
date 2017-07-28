@@ -1,4 +1,4 @@
-(ns scraper.core
+(ns ndsu-food.scraper
   (:require [clj-time.core :as t]
             [clojure.java.io :as io]
             [clojure.string :as string]
