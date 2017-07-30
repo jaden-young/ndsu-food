@@ -68,7 +68,7 @@ ORDER BY
 INSERT INTO served_at (date, meal, category, food_item_id, restaurant_id)
 VALUES (:date, :meal, :category, :food_item_id, :restaurant_id)
 
--- :name- insert-menu-data-all! :! :n
+-- :name insert-menu-data-all! :! :n
 -- :doc Inserts the food item and associated menu data, expects :food_item_name :vegetarian :gluten_free :nuts :date :meal :category :restaurant_name
 -- Inserting restaurant data isn't supported as that would realistically be a
 -- waste of work. The set of restaurants is already fully populated in the db
