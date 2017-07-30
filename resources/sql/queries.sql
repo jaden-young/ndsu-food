@@ -2,7 +2,7 @@
 -- :doc Creates a new food item, returning the auto-generated id
 INSERT INTO food_item
 (name, vegetarian, gluten_free, nuts)
-VALUES (:name, :vegetarian, :gluten-free, :nuts)
+VALUES (:name, :vegetarian, :gluten_free, :nuts)
 RETURNING id
 
 -- :name all-food-items :? :*
@@ -64,19 +64,19 @@ ORDER BY
     meal, r.name, category
 
 -- :name insert-menu-data-with-ids! :! :n
--- :doc Inserts menu data, expects :date :meal :category :food-item-id :restaurant-id
+-- :doc Inserts menu data, expects :date :meal :category :food_item_id :restaurant_id
 INSERT INTO served_at (date, meal, category, food_item_id, restaurant_id)
-VALUES (:date, :meal, :category, :food-item-id, :restaurant-id)
+VALUES (:date, :meal, :category, :food_item_id, :restaurant_id)
 
 -- :name- insert-menu-data-all! :! :n
--- :doc Inserts the food-item and associated menu, expects :food-item-name :vegetarian :gluten-free :nuts :date :meal :category :restaurant-name
+-- :doc Inserts the food item and associated menu data, expects :food_item_name :vegetarian :gluten_free :nuts :date :meal :category :restaurant_name
 -- Inserting restaurant data isn't supported as that would realistically be a
 -- waste of work. The set of restaurants is already fully populated in the db
 -- in the initial schema. If more are to be supported, it will be done with
 -- migrations.
 WITH ins_fi AS (
   INSERT INTO food_item (name, vegetarian, gluten_free, nuts)
-  VALUES (:food-item-name, :vegetarian, :gluten-free, :nuts)
+  VALUES (:food_item_name, :vegetarian, :gluten_free, :nuts)
   ON CONFLICT DO NOTHING
   RETURNING id
   )
