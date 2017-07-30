@@ -6,7 +6,10 @@
    [conman.core :as conman]
    [ndsu-food.config :refer [env]]
    [mount.core :refer [defstate]]
-   [clj-time.coerce :refer [from-sql-date to-sql-date]])
+   [clj-time.coerce :refer [from-sql-date to-sql-date]]
+   [camel-snake-kebab.core :refer [->kebab-case-keyword]]
+   [camel-snake-kebab.extras :refer [transform-keys]]
+   [clojure.string :as str])
   (:import org.postgresql.util.PGobject
            java.sql.Array
            clojure.lang.IPersistentMap
@@ -64,3 +67,33 @@
   (sql-value [value] (to-pg-json value))
   IPersistentVector
   (sql-value [value] (to-pg-json value)))
+
+(defn result-one-snake->kebab
+  [this result options]
+  (->> (hugsql.adapter/result-one this result options)
+       (transform-keys ->kebab-case-keyword)))
+
+(defn result-many-snake->kebab
+  [this result options]
+  (->> (hugsql.adapter/result-many this result options)
+       (map #(transform-keys ->kebab-case-keyword %))))
+
+(defmethod hugsql.core/hugsql-result-fn :1 [sym]
+  'ndsu-food.db.core/result-one-snake->kebab)
+
+(defmethod hugsql.core/hugsql-result-fn :one [sym]
+  'ndsu-food.db.core/result-one-snake->kebab)
+
+(defmethod hugsql.core/hugsql-result-fn :* [sym]
+  'ndsu-food.db.core/result-many-snake->kebab)
+
+(defmethod hugsql.core/hugsql-result-fn :many [sym]
+  'ndsu-food.db.core/result-many-snake->kebab)
+
+#_(defn- hierarchy
+  [keyseq xs]
+  (reduce (fn [m [ks x]]
+            (update-in m ks conj x))
+          {}
+          (for [x xs]
+            [(map x keyseq) (apply dissoc x keyseq)])))
