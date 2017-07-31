@@ -4,33 +4,31 @@
             [clojure.test :refer :all]
             [clojure.java.jdbc :as jdbc]
             [ndsu-food.config :refer [env]]
-            [mount.core :as mount]))
+            [mount.core :as mount]
+            [conman.core :refer [with-transaction]]))
 
 (use-fixtures
   :once
   (fn [f]
     (mount/start
-      #'ndsu-food.config/env
-      #'ndsu-food.db.core/*db*)
+     #'ndsu-food.config/env
+     #'ndsu-food.db.core/*db*)
+    (migrations/migrate ["reset"] (select-keys env [:database-url]))
     (migrations/migrate ["migrate"] (select-keys env [:database-url]))
     (f)))
 
-(deftest test-users
+(deftest test-food-item
   (jdbc/with-db-transaction [t-conn *db*]
     (jdbc/db-set-rollback-only! t-conn)
-    (is (= 1 (db/create-user!
-               t-conn
-               {:id         "1"
-                :first_name "Sam"
-                :last_name  "Smith"
-                :email      "sam.smith@example.com"
-                :pass       "pass"})))
-    (is (= {:id         "1"
-            :first_name "Sam"
-            :last_name  "Smith"
-            :email      "sam.smith@example.com"
-            :pass       "pass"
-            :admin      nil
-            :last_login nil
-            :is_active  nil}
-           (db/get-user t-conn {:id "1"})))))
+    (is (= {:id 1} (db/create-food-item!
+                    t-conn
+                    {:name "test_item"
+                     :vegetarian true
+                     :gluten_free false
+                     :nuts true})))
+    (is (= {:id 1
+            :name "test_item"
+            :vegetarian true
+            :gluten_free false
+            :nuts true}
+           (db/get-food-item t-conn {:id 1})))))
