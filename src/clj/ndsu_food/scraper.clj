@@ -70,7 +70,8 @@
         file (io/file (str cache-dir fname))]
     (when-not (.exists file)
       (io/make-parents file)
-      (io/copy (build-url date loc) file))
+      (with-open [r (io/input-stream (build-url date loc))]
+        (io/copy r file)))
     file))
 
 (defn- grab
