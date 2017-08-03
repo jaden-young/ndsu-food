@@ -1,12 +1,12 @@
 (ns ndsu-food.scraper
-  (:require [clj-time.core :as t]
-            [clojure.java.io :as io]
-            [clojure.string :as string]
-            [cemerick.url :as url]
-            [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
+  (:gen-class)
+  (:require [cemerick.url :as url]
+            [clj-time.core :as t]
             [clj-time.format :as t-fmt]
-            [clojure.string :as str])
-  (:gen-class))
+            [clojure.java.io :as io]
+            [clojure.string :as str]
+            [ndsu-food.db.core :as db]
+            [net.cgrand.enlive-html :as html :refer [attr-contains attr= select]]))
 
 (def ^:const loc-info {:wdc {:name "West Dining Center"
                              :abbreviation "WDC"
@@ -70,7 +70,8 @@
         file (io/file (str cache-dir fname))]
     (when-not (.exists file)
       (io/make-parents file)
-      (io/copy (build-url date loc) file))
+      (with-open [r (io/input-stream (build-url date loc))]
+        (io/copy r file)))
     file))
 
 (defn- grab
@@ -89,7 +90,6 @@
     w
     (str (Character/toTitleCase (first w))
          (subs w 1))))
-
 
 ;;; Selectors. These functions take html data processed by enlive.
 
@@ -118,8 +118,8 @@
                   (html/text) ; the last char of the name is some sort of space,
                   (butlast)   ; but string/trim doesn't get rid of it.
                   (apply str))]
-    {:name (string/replace name #" - Vegetarian" "")
-     :gluten-free (gluten-free? row)
+    {:food_item_name (str/replace name #" - Vegetarian" "")
+     :gluten_free (gluten-free? row)
      :vegetarian (vegetarian? row)
      :nuts (nuts? row)}))
 
@@ -147,7 +147,7 @@
   (let [name (->> (select row [:div.shortmenucats :span])
                   (map #(->> %
                              (html/text)
-                             (string/trim)
+                             (str/trim)
                              (drop 3)
                              (drop-last 3)
                              (apply str)
@@ -158,20 +158,18 @@
     (str/replace (first name) #"/chowders" "")))
 
 (defn- categorize
-  [meal-info]
-  (let [cats-and-items (partition 2 (partition-by category? meal-info))]
-    (vec (for [[[cat] foods] cats-and-items]
-           (let [name (category-name cat)
-                 items (vec (map food-item foods))]
-             {:name name
-              :items items})))))
+  [rows]
+  (let [cats-and-items (partition 2 (partition-by category? rows))]
+    (flatten (for [[[cat] items] cats-and-items]
+               (let [name (category-name cat)
+                     itms (map food-item items)]
+                 (map #(assoc % :category name) itms))))))
 
 (defn- ->meal
   [page]
   (let [name (meal-name page)
         data (categorize (meal-data page))]
-    {:name name
-     :categories data}))
+    (flatten (map #(assoc % :meal name) data))))
 
 (defn- read-page
   [src]
@@ -183,15 +181,16 @@
   able to be coerced to a java.io.Reader."
   [html]
   (let [page (read-page html)
-        meals (map ->meal (meals page))]
+        meals (flatten (map ->meal (meals page)))]
     meals))
 
 (defn- scrape-one
   ([grabber date loc]
-   (let [src (grabber date loc)]
-     {:date (iso-date-fmt date)
-      :restaurant (get loc-info loc)
-      :meals (->meals src)})))
+   (let [data (->meals (grabber date loc))]
+     (flatten (map #(assoc %
+                           :date date
+                           :restaurant_name (get-in loc-info [loc :name]))
+                   data)))))
 
 (defn scrape!
   "Scrapes the NDSU site for menu data on the given date, returning a sequence
@@ -208,7 +207,10 @@
         locs (if (empty? fs)
                (keys loc-info)
                fs)]
-    (map (partial scrape-one grabber date) locs)))
+    (count (->> locs
+                (map (partial scrape-one grabber date))
+                (flatten)
+                (map db/new-food-item-served-at!)))))
 
 (defn -main
   [& args]
