@@ -210,7 +210,7 @@
     (count (->> locs
                 (map (partial scrape-one grabber date))
                 (flatten)
-                (map db/insert-menu-data-all!)))))
+                (map db/new-food-item-served-at!)))))
 
 (defn -main
   [& args]

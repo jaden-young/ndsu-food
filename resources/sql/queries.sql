@@ -1,74 +1,80 @@
--- :name create-food-item! :i
--- :doc Creates a new food item, returning the auto-generated id
+-- :name food-item-by-id :? :1
+-- :doc Gets a single food-item by :id. Optionally {:cols ["col1", ...]}
+SELECT
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
+FROM food_item
+WHERE id = :id
+
+-- :name food-item-by-name :? :1
+-- :doc Gets a single food item with a matching :name. Optionally {:cols ["col1", ...]}
+SELECT
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
+FROM food_item
+WHERE name = :name
+
+-- :name food-items :? :*
+-- :doc Gets all food-items. Optionally specify {:cols ["col1", "col2", ...]}
+SELECT
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
+FROM food_item
+ORDER BY id
+
+-- :name new-food-item! :i
+-- :doc Inserts a new food item, returning the auto-generated id.
 INSERT INTO food_item
 (name, vegetarian, gluten_free, nuts)
 VALUES (:name, :vegetarian, :gluten_free, :nuts)
 RETURNING id
 
--- :name all-food-items :? :*
--- :doc Gets every food item
-SELECT id, name, vegetarian, gluten_free, nuts
-FROM food_item
-
--- :name food-item :? :1
--- :doc Gets a single food-item by :id
-SELECT id, name, vegetarian, gluten_free, nuts
-FROM food_item
-WHERE id = :id
-
--- :name food-item-by-name :? :1
--- :doc Gets a single food item with a matching :name
-SELECT id, name, vegetarian, gluten_free, nuts
-FROM food_item
-WHERE name = :name
-
--- :name all-restaurants :? :*
--- :doc Gets every restaurant
+-- :name restaurant-by-id :? :1
+-- :doc Gets a single restaurant by :id. Optionally {:cols ["col1", "col2", ...]}
 SELECT id, name, abbreviation
-FROM restaurant
-
--- :name restaurant :? :1
--- :doc Gets a single restaurant by :id
-SELECT id, name, abbreviation
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM restaurant
 WHERE id = :id
 
 -- :name restaurant-by-name :? :1
--- :doc Gets a single restaurant with matching :name
+-- :doc Gets a single restaurant with matching :name. Optionally {:cols ["col1", "col2", ...]}
 SELECT id, name, abbreviation
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM restaurant
 WHERE name = :name
 
 -- :name restaurant-by-abbreviation :? :1
--- :doc Gets a single restaurant with matching :abbreviation
-SELECT id, name, abbreviation
+-- :doc Gets a single restaurant with matching :abbreviation. Optionally {:cols ["col1", "col2", ...]}
+SELECT
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM restaurant
 WHERE abbreviation = :abbreviation
+ORDER BY id
+
+-- :name restaurants :? :*
+-- :doc Gets all restaurants. Optionally specify {:cols ["col1", "col2", ...]}
+SELECT
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
+FROM restaurant
+ORDER BY id
 
 -- :name served-on-date :? :*
--- :doc Gets all food items served on a given :date
+-- :doc Gets menu data (only ids) for a given :date. Optionally specify {:cols ["col1", ...]}
 SELECT
-    fi.name AS food_item_name,
-    fi.vegetarian, fi.gluten_free, fi.nuts,
-    r.name AS restaurant_name,
-    sa.date, sa.meal AS meal, sa.category AS category
-FROM
-    food_item AS fi
-      JOIN served_at AS sa
-          ON fi.id = sa.food_item_id
-      JOIN restaurant AS r
-          ON r.id = sa.restaurant_id
-WHERE
-    sa.date = :date
-ORDER BY
-    meal, r.name, category
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
+FROM served_at
+WHERE date = :date
+
+-- :name menus-on-date :? :*
+-- :doc Use {:date date (optionally):cols ["col1", "col2", ...]}
+SELECT
+--~ (if (seq (get params :cols)) ":i*:cols" "*")
+FROM all_menus
+WHERE date = :date
 
 -- :name insert-menu-data-with-ids! :! :n
 -- :doc Inserts menu data, expects :date :meal :category :food_item_id :restaurant_id
 INSERT INTO served_at (date, meal, category, food_item_id, restaurant_id)
 VALUES (:date, :meal, :category, :food_item_id, :restaurant_id)
 
--- :name insert-menu-data-all! :! :n
+-- :name new-food-item-served-at! :! :n
 -- :doc Inserts the food item and associated menu data, expects :food_item_name :vegetarian :gluten_free :nuts :date :meal :category :restaurant_name
 -- Inserting restaurant data isn't supported as that would realistically be a
 -- waste of work. The set of restaurants is already fully populated in the db
