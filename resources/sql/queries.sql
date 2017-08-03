@@ -74,16 +74,25 @@ VALUES (:date, :meal, :category, :food_item_id, :restaurant_id)
 -- waste of work. The set of restaurants is already fully populated in the db
 -- in the initial schema. If more are to be supported, it will be done with
 -- migrations.
-WITH ins_fi AS (
-  INSERT INTO food_item (name, vegetarian, gluten_free, nuts)
-  VALUES (:food_item_name, :vegetarian, :gluten_free, :nuts)
-  ON CONFLICT DO NOTHING
-  RETURNING id
-  )
-, r_id AS (
-      SELECT id
-      FROM restaurant
-      WHERE name = :restaurant-name
+WITH fi_s AS (
+    SELECT id
+    FROM food_item
+    WHERE name = :food_item_name
+), fi_i AS (
+    INSERT INTO food_item (name, vegetarian, gluten_free, nuts)
+    SELECT :food_item_name, :vegetarian, :gluten_free, :nuts
+    WHERE NOT EXISTS (SELECT 1 FROM fi_s)
+    RETURNING id
+), fi AS (
+    SELECT id
+    FROM fi_s
+    UNION ALL
+    SELECT id
+    FROM fi_i
+), r AS (
+    SELECT id
+    FROM restaurant
+    WHERE name = :restaurant_name
  )
 INSERT INTO served_at (date, meal, category, food_item_id, restaurant_id)
-VALUES (:date, :meal, :category, (SELECT id FROM ins_fi), (SELECT id FROM r_id))
+VALUES (:date, :meal, :category, (SELECT id FROM fi), (SELECT id FROM r))
