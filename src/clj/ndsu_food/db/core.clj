@@ -10,7 +10,8 @@
    [camel-snake-kebab.core :refer [->kebab-case-keyword]]
    [camel-snake-kebab.extras :refer [transform-keys]]
    [clojure.string :as str]
-   [ndsu-food.util :as util])
+   [ndsu-food.util :as util]
+   [clj-time.jdbc])
   (:import org.postgresql.util.PGobject
            java.sql.Array
            clojure.lang.IPersistentMap
@@ -42,11 +43,6 @@
   org.joda.time.DateTime
   (result-set-read-column [value metadata index]
     (from-sql-date value)))
-
-(extend-type org.joda.time.DateTime
-  jdbc/ISQLParameter
-  (set-parameter [value ^PreparedStatement stmt idx]
-    (.setDate stmt idx (to-sql-date value))))
 
 (defn to-pg-json [value]
   (doto (PGobject.)
