@@ -6,7 +6,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [ndsu-food.db.core :as db]
-            [net.cgrand.enlive-html :as html :refer [attr-contains attr= select]]))
+            [net.cgrand.enlive-html :as html :refer [attr-contains attr= select]]
+            [ndsu-food.util :as util]))
 
 (def ^:const loc-info {:wdc {:name "West Dining Center"
                              :abbreviation "WDC"
@@ -41,10 +42,6 @@
         dir (str s (java.io.File/separatorChar))]
     dir))
 
-(defn iso-date-fmt
-  [date]
-  (t-fmt/unparse (t-fmt/formatters :date) date))
-
 (defn- menu-date-fmt
   [date]
   (t-fmt/unparse website-date-formatter date))
@@ -55,7 +52,7 @@
                     (str)
                     (subs 1)
                     (str/upper-case))]
-    (str (iso-date-fmt date) "-" loc-str ".html")))
+    (str (util/iso-date-fmt date) "-" loc-str ".html")))
 
 (defn- build-url
   [date loc]
