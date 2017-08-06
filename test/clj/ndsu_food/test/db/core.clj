@@ -20,7 +20,7 @@
 (deftest test-food-item
   (jdbc/with-db-transaction [t-conn *db*]
     (jdbc/db-set-rollback-only! t-conn)
-    (is (= {:id 1} (db/create-food-item!
+    (is (= {:id 1} (db/new-food-item!
                     t-conn
                     {:name "test_item"
                      :vegetarian true
@@ -29,6 +29,6 @@
     (is (= {:id 1
             :name "test_item"
             :vegetarian true
-            :gluten_free false
+            :gluten-free false
             :nuts true}
-           (db/get-food-item t-conn {:id 1})))))
+           (db/get-food-item-by-id t-conn {:id 1})))))

@@ -9,7 +9,8 @@
    [clj-time.coerce :refer [from-sql-date to-sql-date]]
    [camel-snake-kebab.core :refer [->kebab-case-keyword]]
    [camel-snake-kebab.extras :refer [transform-keys]]
-   [clojure.string :as str])
+   [clojure.string :as str]
+   [ndsu-food.util :as util])
   (:import org.postgresql.util.PGobject
            java.sql.Array
            clojure.lang.IPersistentMap
@@ -90,10 +91,48 @@
 (defmethod hugsql.core/hugsql-result-fn :many [sym]
   'ndsu-food.db.core/result-many-snake->kebab)
 
-#_(defn- hierarchy
-  [keyseq xs]
-  (reduce (fn [m [ks x]]
-            (update-in m ks conj x))
-          {}
-          (for [x xs]
-            [(map x keyseq) (apply dissoc x keyseq)])))
+(defn- mmap
+  [f s]
+  (if (map? (first s))
+    (f s)
+    (map f s)))
+
+(defn- extract-food-item
+  [row]
+  (-> row
+      (select-keys [:food-item-name :vegetarian :gluten-free :nuts])
+      (clojure.set/rename-keys {:food-item-name :name})))
+
+(defn- by-category
+  [rows]
+  (->> rows
+       (sort-by :category)
+       (partition-by :category)
+       (map #(hash-map :name (:category (first %))
+                       :items (vec (map extract-food-item %))))))
+(defn- by-restaurant
+  [rows]
+  (->> rows
+       (sort-by :restaurant-id)
+       (partition-by :restaurant-id)
+       (map #(hash-map :name (:restaurant-name (first %))
+                       :categories (vec (mmap by-category %))))))
+
+(defn- by-meal
+  [rows]
+  (->> rows
+       (sort-by :meal)
+       (partition-by :meal)
+       (map #(hash-map :name (:meal (first %))
+                       :restaurants (vec (mmap by-restaurant %))))))
+(defn- by-date
+  [rows]
+  (->> rows
+       (sort-by :date)
+       (partition-by :date)
+       (map #(hash-map :date (util/iso-date-fmt (:date (first %)))
+                       :meals (vec (mmap by-meal %))))))
+
+(defn hierarchize-menu-on-date
+  [rows]
+  (by-date rows))

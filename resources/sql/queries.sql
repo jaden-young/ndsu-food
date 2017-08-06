@@ -1,18 +1,18 @@
--- :name food-item-by-id :? :1
+-- :name get-food-item-by-id :? :1
 -- :doc Gets a single food-item by :id. Optionally {:cols ["col1", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM food_item
 WHERE id = :id
 
--- :name food-item-by-name :? :1
+-- :name get-food-item-by-name :? :1
 -- :doc Gets a single food item with a matching :name. Optionally {:cols ["col1", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM food_item
 WHERE name = :name
 
--- :name food-items :? :*
+-- :name get-food-items :? :*
 -- :doc Gets all food-items. Optionally specify {:cols ["col1", "col2", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
@@ -26,21 +26,21 @@ INSERT INTO food_item
 VALUES (:name, :vegetarian, :gluten_free, :nuts)
 RETURNING id
 
--- :name restaurant-by-id :? :1
+-- :name get-restaurant-by-id :? :1
 -- :doc Gets a single restaurant by :id. Optionally {:cols ["col1", "col2", ...]}
 SELECT id, name, abbreviation
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM restaurant
 WHERE id = :id
 
--- :name restaurant-by-name :? :1
+-- :name get-restaurant-by-name :? :1
 -- :doc Gets a single restaurant with matching :name. Optionally {:cols ["col1", "col2", ...]}
 SELECT id, name, abbreviation
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
 FROM restaurant
 WHERE name = :name
 
--- :name restaurant-by-abbreviation :? :1
+-- :name get-restaurant-by-abbreviation :? :1
 -- :doc Gets a single restaurant with matching :abbreviation. Optionally {:cols ["col1", "col2", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
@@ -48,7 +48,7 @@ FROM restaurant
 WHERE abbreviation = :abbreviation
 ORDER BY id
 
--- :name restaurants :? :*
+-- :name get-restaurants :? :*
 -- :doc Gets all restaurants. Optionally specify {:cols ["col1", "col2", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
@@ -62,7 +62,7 @@ SELECT
 FROM served_at
 WHERE date = :date
 
--- :name menus-on-date :? :*
+-- :name get-menus-on-date :? :*
 -- :doc Use {:date date (optionally):cols ["col1", "col2", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
