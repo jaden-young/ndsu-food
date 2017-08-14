@@ -131,4 +131,12 @@
 
 (defn hierarchize-menu-on-date
   [rows]
-  (by-date rows))
+  (first (by-date rows)))
+
+(defn get-formatted-menu-on-date
+  [date-str]
+  (->> date-str
+       (util/parse-date-add-default-zone)
+       (assoc {} :date)
+       (get-menu-on-date)
+       (hierarchize-menu-on-date)))
