@@ -33,7 +33,8 @@
                  [com.cemerick/url "0.1.1"]
                  [clj-time "0.14.0"]
                  [enlive "1.1.6"]
-                 [camel-snake-kebab "0.4.0"]]
+                 [camel-snake-kebab "0.4.0"]
+                 [amalloy/ring-gzip-middleware "0.1.3"]]
 
   :min-lein-version "2.0.0"
 
