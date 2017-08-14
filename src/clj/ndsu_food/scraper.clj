@@ -177,9 +177,10 @@
   "Extracts a sequence of meals maps from an html document. Argument must be
   able to be coerced to a java.io.Reader."
   [html]
-  (let [page (read-page html)
-        meals (flatten (map ->meal (meals page)))]
-    meals))
+  (->> html
+       (read-page)
+       (map ->meal)
+       (flatten)))
 
 (defn- scrape-one
   ([grabber date loc]

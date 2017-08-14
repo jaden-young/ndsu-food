@@ -62,7 +62,7 @@ SELECT
 FROM served_at
 WHERE date = :date
 
--- :name get-menus-on-date :? :*
+-- :name get-menu-on-date :? :*
 -- :doc Use {:date date (optionally):cols ["col1", "col2", ...]}
 SELECT
 --~ (if (seq (get params :cols)) ":i*:cols" "*")
