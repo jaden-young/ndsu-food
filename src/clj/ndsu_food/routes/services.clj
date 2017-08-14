@@ -52,6 +52,12 @@
     ;; "errors: (throws? (ndsu-food.ns.other-ns/schema-name?asdf0a9s8d))"
     :coercion (constantly nil)
 
+    ;; TODO: list menus resource
+    (GET "/menus" []
+         :return [Menu]
+         :summary "Get a list of menus with pagination"
+         (not-implemented))
+
     (GET "/menus/:date" []
          :path-params [date :- Date-String]
          :return Menu
