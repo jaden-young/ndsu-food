@@ -36,7 +36,7 @@
 
 (def Date-String (describe
                   (s/constrained s/Str date-string?)
-                  "ISO-8601 \"YYYY-MM-DD\" formatted date string"))
+                  "yyyy-MM-dd formatted date string"))
 
 (defapi service-routes
   {:swagger {:ui "/swagger-ui"
@@ -46,17 +46,21 @@
                            :description "Access NDSU Dining menu information"}}}}
 
   (context "/api" []
-    :tags ["Menu"]
+    :tags ["Menus"]
+    ;; While automatic coercion/error throwing is nice, I haven't found a way
+    ;; to customize those error messages. I don't want to return
+    ;; "errors: (throws? (ndsu-food.ns.other-ns/schema-name?asdf0a9s8d))"
+    :coercion (constantly nil)
 
-    (GET "/menu" []
-      :return Menu
-      :query-params [{date :- Date-String (util/today-str)}]
-      :summary "menu for date, defaults to today"
-      (let [d (util/parse-date-add-default-zone date)
-            menu (-> {:date d}
-                     (db/get-menus-on-date)
-                     (db/hierarchize-menu-on-date)
-                     (first))]
-        (if menu
-          (ok menu)
-          (not-found {:errors (str "No menu data for " date)}))))))
+    (GET "/menus/:date" []
+         :path-params [date :- Date-String]
+         :return Menu
+         :summary "Menu for a single date"
+         (if (s/check Date-String date)
+           (bad-request {:errors [{:message "Malformed parameter: date"
+                                   :description (str "date must be a 'yyyy-MM-dd' formatted date string. Got: " date)}]})
+           (if-let [menu (db/get-formatted-menu-on-date date)]
+             (ok menu)
+             (content-type
+              (not-found (str "No menu data found for: " date))
+              "text/plain"))))))
