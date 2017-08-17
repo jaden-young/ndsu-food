@@ -1,11 +1,12 @@
 (ns ndsu-food.scraper
   (:require [clj-time.core :as t]
             [clojure.java.io :as io]
-            [clojure.string :as string]
             [cemerick.url :as url]
             [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
             [clj-time.format :as t-fmt]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [ndsu-food.db.core :as db]
+            [ndsu-food.util :as util])
   (:gen-class))
 
 (def ^:const loc-info {:wdc {:name "West Dining Center"
@@ -41,10 +42,6 @@
         dir (str s (java.io.File/separatorChar))]
     dir))
 
-(defn iso-date-fmt
-  [date]
-  (t-fmt/unparse (t-fmt/formatters :date) date))
-
 (defn- menu-date-fmt
   [date]
   (t-fmt/unparse website-date-formatter date))
@@ -55,7 +52,7 @@
                     (str)
                     (subs 1)
                     (str/upper-case))]
-    (str (iso-date-fmt date) "-" loc-str ".html")))
+    (str (util/iso-date-fmt date) "-" loc-str ".html")))
 
 (defn- build-url
   [date loc]
@@ -119,7 +116,7 @@
                   (html/text) ; the last char of the name is some sort of space,
                   (butlast)   ; but string/trim doesn't get rid of it.
                   (apply str))]
-    {:name (string/replace name #" - Vegetarian" "")
+    {:name (str/replace name #" - Vegetarian" "")
      :gluten-free (gluten-free? row)
      :vegetarian (vegetarian? row)
      :nuts (nuts? row)}))
@@ -148,7 +145,7 @@
   (let [name (->> (select row [:div.shortmenucats :span])
                   (map #(->> %
                              (html/text)
-                             (string/trim)
+                             (str/trim)
                              (drop 3)
                              (drop-last 3)
                              (apply str)
@@ -190,7 +187,7 @@
 (defn- scrape-one
   ([grabber date loc]
    (let [src (grabber date loc)]
-     {:date (iso-date-fmt date)
+     {:date (util/iso-date-fmt date)
       :restaurant (get loc-info loc)
       :meals (->meals src)})))
 
