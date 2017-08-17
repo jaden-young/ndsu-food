@@ -88,7 +88,6 @@
     (str (Character/toTitleCase (first w))
          (subs w 1))))
 
-
 ;;; Selectors. These functions take html data processed by enlive.
 
 (defn- gluten-free?
@@ -188,8 +187,45 @@
   ([grabber date loc]
    (let [src (grabber date loc)]
      {:date (util/iso-date-fmt date)
-      :restaurant (get loc-info loc)
-      :meals (->meals src)})))
+      :restaurant (get loc-info loc :name)
+      :meals (vec (->meals src))})))
+
+(defn- flatten-menu
+  [menu]
+  (->> menu
+       (map (comp
+             flatten
+             (fn [loc-menu]
+               (let [date (:date loc-menu)
+                     loc-name (get-in loc-menu [:restaurant :name])
+                     meals (:meals loc-menu)]
+                 (->> meals
+                      (map (comp
+                            flatten
+                            (fn [meal]
+                              (let [meal-name (:meal meal)
+                                    cats (:categories meal)]
+                                (->> cats
+                                     (map (comp
+                                           flatten
+                                           (fn [category]
+                                             (let [cat-name (:name category)
+                                                   items (:items category)]
+                                               (->> items
+                                                    (map (fn [item]
+                                                           (let [item-name (:name item)
+                                                                 veg (:vegetarian item)
+                                                                 glut (:gluten-free item)
+                                                                 nuts (:nuts item)]
+                                                             {:date date
+                                                              :restaurant-name loc-name
+                                                              :meal meal-name
+                                                              :category cat-name
+                                                              :food-item-name item-name
+                                                              :vegetarian veg
+                                                              :gluten-free glut
+                                                              :nuts nuts}))))))))))))))))))
+       (flatten)))
 
 (defn scrape!
   "Scrapes the NDSU site for menu data on the given date, returning a sequence
