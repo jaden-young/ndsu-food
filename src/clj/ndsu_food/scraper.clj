@@ -190,39 +190,35 @@
       :restaurant (get loc-info loc :name)
       :meals (vec (->meals src))})))
 
-(defn- flatm
-  [menu]
-  ())
+(defn- rename-food-item
+  [item]
+    (clojure.set/rename-keys item {:name :food-item-name}))
+
+(defn- flatten-category
+  [category]
+  (let [cat-name (:name category)
+        items (map rename-food-item (:items category))]
+    (map #(assoc % :category cat-name) items)))
+
+(defn- flatten-meal
+  [meal]
+  (let [meal-name (:name meal)
+        cats (flatten (map flatten-category (:categories meal)))]
+    (map #(assoc % :meal meal-name) cats)))
 
 (defn- flatten-menu
   [menu]
-  (->> menu
-       (mapcat (fn [loc-menu]
-              (let [date (:date loc-menu)
-                    loc-name (get-in loc-menu [:restaurant :name])
-                    meals (:meals loc-menu)]
-                (->> meals
-                     (mapcat (fn [meal]
-                               (let [meal-name (:meal meal)
-                                     cats (:categories meal)]
-                                 (->> cats
-                                      (mapcat (fn [category]
-                                                (let [cat-name (:name category)
-                                                      items (:items category)]
-                                                  (->> items
-                                                       (map (fn [item]
-                                                              (let [item-name (:name item)
-                                                                    veg (:vegetarian item)
-                                                                    glut (:gluten-free item)
-                                                                    nuts (:nuts item)]
-                                                                {:date date
-                                                                 :restaurant-name loc-name
-                                                                 :meal meal-name
-                                                                 :category cat-name
-                                                                 :food-item-name item-name
-                                                                 :vegetarian veg
-                                                                 :gluten-free glut
-                                                                 :nuts nuts})))))))))))))))))
+  (let [date (:date menu)
+        r-name (get-in menu [:restaurant :name])
+        meals (flatten (map flatten-meal (:meals menu)))]
+    (flatten (map #(merge {:date date
+                   :restaurant-name r-name}
+                  %)
+          meals))))
+
+(defn flatten-menus
+  [menus]
+  (mapcat flatten-menu menus))
 
 (defn scrape!
   "Scrapes the NDSU site for menu data on the given date, returning a sequence
