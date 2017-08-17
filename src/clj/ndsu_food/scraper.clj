@@ -1,13 +1,12 @@
 (ns ndsu-food.scraper
-  (:gen-class)
-  (:require [cemerick.url :as url]
-            [clj-time.core :as t]
-            [clj-time.format :as t-fmt]
+  (:require [clj-time.core :as t]
             [clojure.java.io :as io]
-            [clojure.string :as str]
-            [ndsu-food.db.core :as db]
-            [net.cgrand.enlive-html :as html :refer [attr-contains attr= select]]
-            [ndsu-food.util :as util]))
+            [clojure.string :as string]
+            [cemerick.url :as url]
+            [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
+            [clj-time.format :as t-fmt]
+            [clojure.string :as str])
+  (:gen-class))
 
 (def ^:const loc-info {:wdc {:name "West Dining Center"
                              :abbreviation "WDC"
@@ -42,6 +41,10 @@
         dir (str s (java.io.File/separatorChar))]
     dir))
 
+(defn iso-date-fmt
+  [date]
+  (t-fmt/unparse (t-fmt/formatters :date) date))
+
 (defn- menu-date-fmt
   [date]
   (t-fmt/unparse website-date-formatter date))
@@ -52,7 +55,7 @@
                     (str)
                     (subs 1)
                     (str/upper-case))]
-    (str (util/iso-date-fmt date) "-" loc-str ".html")))
+    (str (iso-date-fmt date) "-" loc-str ".html")))
 
 (defn- build-url
   [date loc]
@@ -88,6 +91,7 @@
     (str (Character/toTitleCase (first w))
          (subs w 1))))
 
+
 ;;; Selectors. These functions take html data processed by enlive.
 
 (defn- gluten-free?
@@ -115,8 +119,8 @@
                   (html/text) ; the last char of the name is some sort of space,
                   (butlast)   ; but string/trim doesn't get rid of it.
                   (apply str))]
-    {:food_item_name (str/replace name #" - Vegetarian" "")
-     :gluten_free (gluten-free? row)
+    {:name (string/replace name #" - Vegetarian" "")
+     :gluten-free (gluten-free? row)
      :vegetarian (vegetarian? row)
      :nuts (nuts? row)}))
 
@@ -144,7 +148,7 @@
   (let [name (->> (select row [:div.shortmenucats :span])
                   (map #(->> %
                              (html/text)
-                             (str/trim)
+                             (string/trim)
                              (drop 3)
                              (drop-last 3)
                              (apply str)
@@ -155,18 +159,20 @@
     (str/replace (first name) #"/chowders" "")))
 
 (defn- categorize
-  [rows]
-  (let [cats-and-items (partition 2 (partition-by category? rows))]
-    (flatten (for [[[cat] items] cats-and-items]
-               (let [name (category-name cat)
-                     itms (map food-item items)]
-                 (map #(assoc % :category name) itms))))))
+  [meal-info]
+  (let [cats-and-items (partition 2 (partition-by category? meal-info))]
+    (vec (for [[[cat] foods] cats-and-items]
+           (let [name (category-name cat)
+                 items (vec (map food-item foods))]
+             {:name name
+              :items items})))))
 
 (defn- ->meal
   [page]
   (let [name (meal-name page)
         data (categorize (meal-data page))]
-    (flatten (map #(assoc % :meal name) data))))
+    {:name name
+     :categories data}))
 
 (defn- read-page
   [src]
@@ -177,18 +183,16 @@
   "Extracts a sequence of meals maps from an html document. Argument must be
   able to be coerced to a java.io.Reader."
   [html]
-  (->> html
-       (read-page)
-       (map ->meal)
-       (flatten)))
+  (let [page (read-page html)
+        meals (map ->meal (meals page))]
+    meals))
 
 (defn- scrape-one
   ([grabber date loc]
-   (let [data (->meals (grabber date loc))]
-     (flatten (map #(assoc %
-                           :date date
-                           :restaurant_name (get-in loc-info [loc :name]))
-                   data)))))
+   (let [src (grabber date loc)]
+     {:date (iso-date-fmt date)
+      :restaurant (get loc-info loc)
+      :meals (->meals src)})))
 
 (defn scrape!
   "Scrapes the NDSU site for menu data on the given date, returning a sequence
@@ -205,10 +209,7 @@
         locs (if (empty? fs)
                (keys loc-info)
                fs)]
-    (count (->> locs
-                (map (partial scrape-one grabber date))
-                (flatten)
-                (map db/new-food-item-served-at!)))))
+    (map (partial scrape-one grabber date) locs)))
 
 (defn -main
   [& args]
