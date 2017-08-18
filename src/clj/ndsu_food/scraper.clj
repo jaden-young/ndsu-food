@@ -108,7 +108,7 @@
   (not (empty? (select row [:div.shortmenucats]))))
 
 (defn- food-item
-  "Selects a food item from a row"
+  "Extracts a food item from a row"
   [row]
   (let [name (->> (select row [:div.shortmenurecipes :span])
                   (first)
@@ -119,25 +119,6 @@
      :gluten-free (gluten-free? row)
      :vegetarian (vegetarian? row)
      :nuts (nuts? row)}))
-
-(defn- meals
-  "Selects a map of nodes where each top-level entry is a meal"
-  [page]
-  (select page
-          [[:table (attr= :cellspacing "0") (attr= :cellpadding "0")
-            (attr= :border "0") (attr= :width "100%") (attr= :height "100%")]]))
-
-(defn- meal-name
-  "Selects the meal name of the first meal found as a string"
-  [page]
-  (->> (select page [:div.shortmenumeals])
-       (map html/text)
-       (first)))
-
-(defn- meal-data
-  "Selects the categories and menu items from a meal page"
-  [page]
-  (select page [:table (attr= :cellspacing "1") :> :tr]))
 
 (defn- category-name
   [row]
@@ -162,6 +143,26 @@
                  items (vec (map food-item foods))]
              {:name name
               :items items})))))
+
+(defn- meals
+  "Selects a map of nodes where each top-level entry is a meal"
+  [page]
+  (select page
+          [[:table (attr= :cellspacing "0") (attr= :cellpadding "0")
+            (attr= :border "0") (attr= :width "100%") (attr= :height "100%")]]))
+
+(defn- meal-name
+  "Selects the meal name of the first meal found as a string"
+  [page]
+  (->> (select page [:div.shortmenumeals])
+       (map html/text)
+       (first)))
+
+(defn- meal-data
+  "Selects the categories and menu items from a meal page"
+  [page]
+  (select page [:table (attr= :cellspacing "1") :> :tr]))
+
 
 (defn- ->meal
   [page]
@@ -190,14 +191,15 @@
       :restaurant (get loc-info loc :name)
       :meals (vec (->meals src))})))
 
-(defn- rename-food-item
+(defn- extract-food-item
   [item]
-    (clojure.set/rename-keys item {:name :food-item-name}))
+  (clojure.set/rename-keys item {:name :food_item_name
+                                 :gluten-free :gluten_free}))
 
 (defn- flatten-category
   [category]
   (let [cat-name (:name category)
-        items (map rename-food-item (:items category))]
+        items (map extract-food-item (:items category))]
     (map #(assoc % :category cat-name) items)))
 
 (defn- flatten-meal
@@ -208,11 +210,11 @@
 
 (defn- flatten-menu
   [menu]
-  (let [date (:date menu)
+  (let [date (util/parse-date-add-default-zone (:date menu))
         r-name (get-in menu [:restaurant :name])
         meals (flatten (map flatten-meal (:meals menu)))]
     (flatten (map #(merge {:date date
-                   :restaurant-name r-name}
+                   :restaurant_name r-name}
                   %)
           meals))))
 
@@ -236,6 +238,14 @@
                (keys loc-info)
                fs)]
     (map (partial scrape-one grabber date) locs)))
+
+(defn scrape-to-db!
+  [date]
+  (let [menus (map
+               (partial scrape-one persist! date)
+               (keys loc-info))
+        flat-menus (flatten-menus menus)]
+    (db/insert-scraped-menus! flat-menus)))
 
 (defn -main
   [& args]

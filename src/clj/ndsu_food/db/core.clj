@@ -11,7 +11,8 @@
    [camel-snake-kebab.extras :refer [transform-keys]]
    [clojure.string :as str]
    [ndsu-food.util :as util]
-   [clj-time.jdbc])
+   [clj-time.jdbc]
+   [clojure.tools.logging :as log])
   (:import org.postgresql.util.PGobject
            java.sql.Array
            clojure.lang.IPersistentMap
@@ -140,3 +141,13 @@
        (assoc {} :date)
        (get-menu-on-date)
        (hierarchize-menu-on-date)))
+
+(defn insert-scraped-menus!
+  [menus]
+  (conman/with-transaction [*db*]
+    (try
+      (->> menus
+           (map new-food-item-served-at!)
+           (count))
+      (catch Exception e
+        (log/error e)))))
