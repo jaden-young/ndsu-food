@@ -5,8 +5,9 @@
             [net.cgrand.enlive-html :as html :refer [select attr= attr-contains]]
             [clj-time.format :as t-fmt]
             [clojure.string :as str]
-            [ndsu-food.db.core :as db]
-            [ndsu-food.util :as util])
+            [ndsu-food.db.core :as db :refer [*db*]]
+            [ndsu-food.util :as util]
+            [clojure.java.jdbc :as jdbc])
   (:gen-class))
 
 (def ^:const loc-info {:wdc {:name "West Dining Center"
@@ -32,7 +33,7 @@
 (def ^:const base-url "https://www.ndsu.edu/dining/menu/shortmenu.asp")
 (def website-date-formatter (t-fmt/formatter "M/d/yyyy"))
 
-(def cache-dir
+(def default-cache-dir
   ;; One would assume that a directory name ends in '/', but I guess Java
   ;; has its reasons.
   (let [home (System/getProperty "user.home")
@@ -41,6 +42,11 @@
         s (apply str path)
         dir (str s (java.io.File/separatorChar))]
     dir))
+
+(defn- read-page
+  [src]
+  (with-open [rdr (io/reader src)]
+    (html/html-resource rdr)))
 
 (defn- menu-date-fmt
   [date]
@@ -62,20 +68,16 @@
     (str (assoc u :query q))))
 
 (defn- persist!
-  [date loc]
-  (let [fname (build-filename date loc)
-        file (io/file (str cache-dir fname))]
-    (when-not (.exists file)
-      (io/make-parents file)
-      (with-open [r (io/input-stream (build-url date loc))]
-        (io/copy r file)))
-    file))
-
-(defn- grab
-  [no-cache]
-  (if no-cache
-    build-url
-    persist!))
+  ([date loc]
+   (persist! date loc default-cache-dir))
+  ([date loc cache-dir]
+   (let [fname (build-filename date loc)
+         file (io/file (str cache-dir fname))]
+     (when-not (.exists file)
+       (io/make-parents file)
+       (with-open [r (io/input-stream (build-url date loc))]
+         (io/copy r file)))
+     file)))
 
 ;; *****************************************************************************
 ;; Scrape pages
@@ -135,15 +137,6 @@
     ;; application. "soups" carries just as much meaning as "soups/chowders"
     (str/replace (first name) #"/chowders" "")))
 
-(defn- categorize
-  [meal-info]
-  (let [cats-and-items (partition 2 (partition-by category? meal-info))]
-    (vec (for [[[cat] foods] cats-and-items]
-           (let [name (category-name cat)
-                 items (vec (map food-item foods))]
-             {:name name
-              :items items})))))
-
 (defn- meals
   "Selects a map of nodes where each top-level entry is a meal"
   [page]
@@ -163,6 +156,17 @@
   [page]
   (select page [:table (attr= :cellspacing "1") :> :tr]))
 
+;;; Apply selectors to parse data
+
+(defn- categorize
+  [meal-info]
+  (let [cats-and-items (partition 2 (partition-by category? meal-info))]
+    (vec (for [[[cat] foods] cats-and-items]
+           (let [name (category-name cat)
+                 items (vec (map food-item foods))]
+             {:name name
+              :items items})))))
+
 
 (defn- ->meal
   [page]
@@ -170,11 +174,6 @@
         data (categorize (meal-data page))]
     {:name name
      :categories data}))
-
-(defn- read-page
-  [src]
-  (with-open [rdr (io/reader src)]
-    (html/html-resource rdr)))
 
 (defn- ->meals
   "Extracts a sequence of meals maps from an html document. Argument must be
@@ -184,12 +183,7 @@
         meals (map ->meal (meals page))]
     meals))
 
-(defn- scrape-one
-  ([grabber date loc]
-   (let [src (grabber date loc)]
-     {:date (util/iso-date-fmt date)
-      :restaurant (get loc-info loc :name)
-      :meals (vec (->meals src))})))
+;;; Flatten parsed data into format consumable by the database
 
 (defn- extract-food-item
   [item]
@@ -210,42 +204,93 @@
 
 (defn- flatten-menu
   [menu]
-  (let [date (util/parse-date-add-default-zone (:date menu))
+  (let [date (:date menu)
         r-name (get-in menu [:restaurant :name])
         meals (flatten (map flatten-meal (:meals menu)))]
     (flatten (map #(merge {:date date
-                   :restaurant_name r-name}
-                  %)
-          meals))))
+                           :restaurant_name r-name}
+                          %)
+                  meals))))
 
 (defn flatten-menus
+  "Flatten menus produced by scrape! into a format consumable by the database"
   [menus]
   (mapcat flatten-menu menus))
 
-(defn scrape!
-  "Scrapes the NDSU site for menu data on the given date, returning a sequence
-  of menus. To specify which restaurants are scraped, pass any number of: :wdc
-  :rdc :udc :pe :mg, Otherwise all menus are scraped. Scraped html pages are
-  persisted to ~/.cache/ndsu-food/html/ unless :no-cache is passed as an arg.
-  :no-cache always forces a new hit to the web, otherwise cache is checked
-  first. Archiving the pages may be advisable since past pages are not available
-  from the NDSU site."
-  [date & flags]
-  (let [flags (set flags)
-        grabber (grab (contains? flags :no-cache))
-        fs (disj flags :no-cache)
-        locs (if (empty? fs)
-               (keys loc-info)
-               fs)]
-    (map (partial scrape-one grabber date) locs)))
+(defn- insert-scraped-menus!
+  "Takes a sequence of flat menu data and inserts each inside of a transaction.
+  Returns the number of items inserted."
+  [menus]
+  (jdbc/with-db-transaction [tx *db*]
+    (->> menus
+         (map (fn [item]
+                (try
+                  (db/new-food-item-served-at! item)
+                  ;; While only catching Exception is normally a bad idea, and
+                  ;; it would be better to catch the specific kind of exception
+                  ;; we're looking for, that kind of exception is actually
+                  ;; wrapped twice. Here we want to know if our
+                  ;; "unique_served_at" constraint has been violated, meaning
+                  ;; that the record we're trying to insert already exists. When
+                  ;; that exception is raised initially as an
+                  ;; org.postgresql.util.PSQLException, it is propagated up into
+                  ;; jdbc and wrapped in a java.sql.BatchUpdateException. Since
+                  ;; the function we're calling is generated by HugSQL, it is
+                  ;; then wrapped in a plain old java.lang.Exception. To get to
+                  ;; the original exception we have to do a bit of unwrapping.
+                  (catch Exception e
+                    (when-not (str/includes?
+                               (.getMessage (.getCause (.getCause e)))
+                               "unique_served_at")
+                      (throw e))))))
+         (filter some?)
+         (count))))
 
-(defn scrape-to-db!
-  [date]
-  (let [menus (map
-               (partial scrape-one persist! date)
-               (keys loc-info))
-        flat-menus (flatten-menus menus)]
-    (db/insert-scraped-menus! flat-menus)))
+(defn- scrape-one
+  ([grabber date loc]
+   (let [src (grabber date loc)]
+     {:date (util/iso-date-fmt date)
+      :restaurant (get loc-info loc :name)
+      :meals (vec (->meals src))})))
+
+(defn scrape!
+  "Scrapes the NDSU site for menu data on the given date.
+  Arguments:
+      date: 'yyyy-MM-dd' formatted string
+
+  Usage:
+      Scrapes every menu on the date 1970-01-01, saves the
+      html file in the default cache dir ~/home/$USER/.cache/ndsu-food/html/
+      and saves the resulting data to the database
+
+      (scrape! (clj-time.core/date-time 1970 01 01))
+
+  Options:
+      cache-dir: A string representing an absolute path to the directory to save
+                 cached html pages. If set to nil or false, the pages are not
+                 cached and the website is hit each time.
+                 Defaults to /home/$USER/.cache/ndsu-food/html/
+      save-to-db: If true, save the scraped data to the database and return the
+                  number of items inserted. The inserts are performed inside of
+                  a transaction. If any exceptions are raised (other than then
+                  the data already existing) the exception is thrown and the
+                  transaction rolled back. If false, returns a sequence of maps
+                  where each map represents the menu for a single restaurant.
+      restaurants: Vector of keywords specifying which establishments to scrape.
+                   Defaults to all. Available options: :rdc :wdc :udc :pe :mg "
+  [date & {:keys [cache-dir save-to-db restaurants]
+           :or {cache-dir default-cache-dir
+                save-to-db true
+                restaurants [:rdc :wdc :udc :pe :mg]}}]
+  (let [grab (if cache-dir persist! build-url)
+        d (util/parse-date-add-default-zone date)
+        menus (map (partial scrape-one grab d) restaurants)]
+    (if save-to-db
+      (->> menus
+           (flatten-menus)
+           (map #(update % :date util/parse-date-add-default-zone))
+           (insert-scraped-menus!))
+      menus)))
 
 (defn -main
   [& args]

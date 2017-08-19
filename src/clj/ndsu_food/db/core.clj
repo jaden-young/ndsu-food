@@ -141,13 +141,3 @@
        (assoc {} :date)
        (get-menu-on-date)
        (hierarchize-menu-on-date)))
-
-(defn insert-scraped-menus!
-  [menus]
-  (conman/with-transaction [*db*]
-    (try
-      (->> menus
-           (map new-food-item-served-at!)
-           (count))
-      (catch Exception e
-        (log/error e)))))
