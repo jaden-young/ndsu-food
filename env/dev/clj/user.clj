@@ -6,10 +6,11 @@
             [ndsu-food.config :refer [env]]
             ndsu-food.core
             [ndsu-food.db.core :as db]
-            [ndsu-food.util :as util]))
+            [ndsu-food.util :as util]
+            [ndsu-food.scraper :as scraper]))
 
-(def db-map {:store :database
-                 :db (env :database-url)})
+#_(def db-map {:store :database
+             :db (env :database-url)})
 
 (defn start []
   (mount/start-without #'ndsu-food.core/repl-server))
@@ -21,9 +22,8 @@
   (stop)
   (start))
 
-
-(defn migrate [] (mig/migrate db-map))
-(defn rollback [] (mig/rollback db-map))
-(defn create
-  [name]
-  (mig/create db-map name))
+#_(defn migrate [] (mig/migrate db-map))
+#_(defn rollback [] (mig/rollback db-map))
+#_(defn create
+    [name]
+    (mig/create db-map name))
