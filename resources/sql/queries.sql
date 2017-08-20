@@ -90,6 +90,7 @@ WITH fi_s AS (
     WHERE NOT EXISTS (SELECT 1 FROM fi_s)
     RETURNING id
 ), fi AS (
+    -- only one of these will have an element.
     SELECT id
     FROM fi_s
     UNION ALL
@@ -102,3 +103,4 @@ WITH fi_s AS (
  )
 INSERT INTO served_at (date, meal, category, food_item_id, restaurant_id)
 VALUES (:date, :meal, :category, (SELECT id FROM fi), (SELECT id FROM r))
+ON CONFLICT DO NOTHING
